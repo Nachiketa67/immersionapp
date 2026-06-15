@@ -5,15 +5,14 @@ import random
 # 1. Page Configuration
 st.set_page_config(page_title="PCI Project Cohesion Index", layout="wide")
 
-# 2. Setup Session State for Demo (Ensures zero database lag during presentation)
+# 2. Setup Session State for Demo
 if "project_saved" not in st.session_state:
     st.session_state.project_saved = False
     st.session_state.project_title = ""
     st.session_state.project_brief = ""
     st.session_state.questions = []
-    st.session_state.all_responses = {}  # Format: {user_role: {q_index: answer}}
+    st.session_state.all_responses = {}
 
-# Dummy fallback questions if API fails or for instant mock data
 FALLBACK_QUESTIONS = [
     "What is your understanding of the primary technical milestone for this sprint?",
     "Which external API dependencies present the highest risk to our launch date?",
@@ -25,6 +24,49 @@ FALLBACK_QUESTIONS = [
     "What metrics will we use to determine if this prototype is successful?"
 ]
 
+MOCK_ANSWERS = {
+    "Person 1 (Frontend Developer)": [
+        "Deliver the landing page and connection state wrapper by tomorrow morning.",
+        "The OpenAI API key configuration and regional endpoint availability.",
+        "The Project Lead or technical architects on the core engineering squad.",
+        "We are managing task progression visually through simple internal lists.",
+        "No major blocker, but handling async visual layouts needs verification.",
+        "We can transition our hosting models to static edge delivery setups.",
+        "We will run alignment check-ins daily inside the primary server chat.",
+        "A functioning application that handles real-time configuration swaps."
+    ],
+    "Person 2 (AI Engineer)": [
+        "Establish clean prompt structures and parse completion outputs successfully.",
+        "Model token limits, strict output structure schema validation, and timeouts.",
+        "The lead system designer or structural engineering point-of-contact.",
+        "Using code logs, terminal output verification, and shared code snippets.",
+        "Optimizing high-concurrency prompt evaluations under memory resource pressure.",
+        "Scale back to local testing instances or switch down to compact model tiers.",
+        "On-demand calls whenever breaking changes hit internal schema layouts.",
+        "Deterministic output delivery across consecutive inference cycles."
+    ],
+    "Person 3 (Backend Engineer)": [
+        "Initialize data endpoints and handle local environment variable storage.",
+        "Database connections dropped by hosting rules or missing API tokens.",
+        "The engineering manager or designated database administrator.",
+        "Local container tracking tools and collaborative Git source controls.",
+        "Configuring production migration keys without incurring schema conflicts.",
+        "Downgrade cloud server resource caps to basic structural configurations.",
+        "Weekly status summaries unless system execution blocks code compilation.",
+        "Database requests completing with clean success returns under standard loads."
+    ],
+    "Person 4 (Product Lead)": [
+        "Validate the end-to-end product showcase flow for project presentations.",
+        "Running out of free API platform credits mid-way through judging events.",
+        "The primary founder or presentation team lead making final design calls.",
+        "Shared documents, alignment sheets, and interactive milestone trackers.",
+        "No internal skill gaps, but speed-to-delivery poses our greatest risk.",
+        "Leverage alternative community platforms or use static mock data sets.",
+        "Continuous open review channels throughout our active presentation cycles.",
+        "A flawless user narrative matching the underlying business logic vision."
+    ]
+}
+
 # 3. Sidebar: Hackathon Demo Controller
 with st.sidebar:
     st.header("🛠️ Demo Control Panel")
@@ -34,6 +76,15 @@ with st.sidebar:
         "Select Active User Persona:",
         ["Person 1 (Frontend Developer)", "Person 2 (AI Engineer)", "Person 3 (Backend Engineer)", "Person 4 (Product Lead)"]
     )
+    
+    # Fast-track button to immediately unlock the visual dashboard for judges
+    if st.session_state.project_saved:
+        st.divider()
+        if st.button("⚡ Auto-Fill Demo Data", type="secondary"):
+            for role, answers in MOCK_ANSWERS.items():
+                st.session_state.all_responses[role] = {i: ans for i, ans in enumerate(answers)}
+            st.success("Populated all team member responses instantly!")
+            st.button("Click to Refresh Dashboard") # Simple state updater
     
     st.divider()
     if st.button("Reset Entire Demo", type="primary"):
@@ -50,36 +101,33 @@ if not st.session_state.project_saved:
     
     with st.form("init_project"):
         title = st.text_input("Project Name", placeholder="e.g., Nexus AI Marketplace")
-        brief = st.text_area("Project Brief & Technical Scope", placeholder="Paste product requirements documents or rough feature ideas here...")
+        brief = st.text_area("Project Brief & Technical Scope", placeholder="Paste product requirements...")
         
-        # Pull OpenAI Key from Streamlit Secrets Configuration
-        api_key_configured = "OPENAI_API_KEY" in st.secrets
-        
+        # FIXED: Placed safely inside the form container
         submit = st.form_submit_button("Generate Alignment Strategy")
         
     if submit and brief:
         st.session_state.project_title = title
         st.session_state.project_brief = brief
         
-        if api_key_configured:
-            with st.spinner("AI analyzing scope and generating targeted alignment checklist..."):
-                try:
-                    openai.api_key = st.secrets["OPENAI_API_KEY"]
-                    prompt = f"Analyze this project brief and output exactly 8 specific alignment questions to test if an engineering team is on the same page regarding execution, architecture, and risks. Brief: {brief}. Output only the 8 questions as a numbered list. No filler text."
-                    
-                    response = openai.ChatCompletion.create(
-                        model="gpt-4o",
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.5
-                    )
-                    
-                    raw_text = response.choices[0].message.content
-                    questions = [q.split(". ", 1)[-1].strip() for q in raw_text.strip().split("\n") if q]
-                    st.session_state.questions = questions[:8]
-                except Exception:
-                    st.session_state.questions = FALLBACK_QUESTIONS
-        else:
-            # Fallback seamlessly if hackathon keys aren't configured yet
+        # FIXED: Wrapped in try/except to prevent StreamlitSecretNotFoundError
+        try:
+            if "OPENAI_API_KEY" in st.secrets:
+                openai.api_key = st.secrets["OPENAI_API_KEY"]
+                prompt = f"Analyze this project brief and output exactly 8 specific alignment questions. Brief: {brief}. Output only the 8 questions as a numbered list. No filler text."
+                
+                response = openai.ChatCompletion.create(
+                    model="gpt-4o",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.5
+                )
+                
+                raw_text = response.choices.message.content
+                questions = [q.split(". ", 1)[-1].strip() for q in raw_text.strip().split("\n") if q]
+                st.session_state.questions = questions[:8]
+            else:
+                st.session_state.questions = FALLBACK_QUESTIONS
+        except Exception:
             st.session_state.questions = FALLBACK_QUESTIONS
             
         st.session_state.project_saved = True
@@ -96,7 +144,6 @@ else:
         st.subheader(f"Responding as: :blue[{current_role}]")
         st.write("Answer the following AI-generated questions based on your understanding of the scope:")
         
-        # Load existing responses for this specific persona if they exist
         if current_role not in st.session_state.all_responses:
             st.session_state.all_responses[current_role] = {}
             
@@ -116,12 +163,10 @@ else:
         total_respondents = len(st.session_state.all_responses)
         
         if total_respondents == 0:
-            st.warning("No data collected yet. Go to the first tab and submit answers for at least one persona.")
+            st.warning("No data collected yet. Go to the first tab and submit answers for at least one persona, or use '⚡ Auto-Fill Demo Data' in the sidebar.")
         else:
             st.subheader("Team Cohesion Health Metrics")
             
-            # Algorithmic calculation of mock PCI tracking vector based on responses input
-            # Scales metrics based on the volume of detailed feedback provided
             chars_written = sum(len(str(ans)) for role in st.session_state.all_responses.values() for ans in role.values())
             random.seed(chars_written if chars_written > 0 else 42)
             
@@ -138,30 +183,13 @@ else:
             
             st.divider()
             
-            # Show collected feedback raw text comparison for judges to review divergence
             st.subheader("🔍 Side-by-Side Review Matrix")
             selected_q = st.selectbox("Select question to evaluate team divergence:", [f"Q{i+1}: {q[:60]}..." for i, q in enumerate(st.session_state.questions)])
-            q_idx = int(selected_q.split(":")[0][1:]) - 1
+            
+            # Simple, bulletproof index mapping
+            try:
+                q_idx = int(selected_q.split("Q")[1].split(":")[0]) - 1
+            except Exception:
+                q_idx = 0
             
             st.info(f"**Full Question:** {st.session_state.questions[q_idx]}")
-            
-            for role, answers in st.session_state.all_responses.items():
-                answer_text = answers.get(q_idx, "*No answer recorded yet.*")
-                st.markdown(f"**{role}:**")
-                st.caption(answer_text)
-            
-            st.divider()
-            
-            # Strategic Action Plan Generation
-            st.subheader("💡 AI Structural Interventions")
-            if pci < 75:
-                st.error("⚠️ High Risk Anomaly Detected: Critical friction points identified regarding release timeline ownership.")
-                st.markdown("""
-                - **Intervention 1:** Lock down an immediate 30-minute sync between Backend and AI engineering streams to map contract interfaces.
-                - **Intervention 2:** Establish standard project metric definitions inside a centralized dashboard rather than relying on disparate tracking systems.
-                """)
-            else:
-                st.success("✅ Execution Health Nominal: Strong cross-functional alignment observed across core architectural layers.")
-                st.markdown("""
-                - **Recommendation:** Proceed directly to environment initialization and begin concurrent sprint tasks.
-                """)
